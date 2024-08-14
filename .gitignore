@@ -4,3 +4,4 @@ build
 mimizuku.egg-info
 */__pycache__/*
 *pkl
+dist
