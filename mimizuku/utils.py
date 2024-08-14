@@ -17,5 +17,5 @@ def safe_transform(encoder, data, unknown_value=-1):
         if item in encoder.classes_:
             encoded.append(encoder.transform([item])[0])
         else:
-            encoded.append(unknown_value)  # 未知のラベルにはunknown_valueを使用
+            encoded.append(unknown_value)
     return np.array(encoded)
