@@ -13,11 +13,14 @@ from .utils import anonymize_path, safe_transform
 
 
 class Mimizuku:
-    def __init__(self, n_estimators=100, contamination=0.01, random_state=42):
+    def __init__(
+        self, n_estimators=500, random_state=42, max_samples=0.8, contamination=0.03
+    ):
         self.model = IsolationForest(
             n_estimators=n_estimators,
-            contamination=contamination,
             random_state=random_state,
+            max_samples=max_samples,
+            contamination=contamination,
         )
         self.tfidf_vectorizer = TfidfVectorizer()
         self.le_hostname = LabelEncoder()

@@ -1,7 +1,7 @@
 from mimizuku import Mimizuku
 
 # Initialize the model
-model = Mimizuku(n_estimators=500)
+model = Mimizuku()
 
 # Train the model with a log file or DataFrame
 model.fit("./training.json")
