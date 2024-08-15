@@ -31,7 +31,7 @@ class Mimizuku:
     def load_and_preprocess(self, data, fit=False, keep_original=False):
         alerts = []
         if isinstance(data, str):
-            with open(data) as json_file:
+            with open(data, encoding="utf-8", errors="replace") as json_file:
                 for line in json_file:
                     try:
                         alert = json.loads(line)
