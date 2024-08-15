@@ -84,7 +84,7 @@ class Mimizuku:
                 "command": alert.get("data", {}).get("audit", {}).get("command"),
                 "args": execve_args,
                 "cwd": alert.get("data", {}).get("audit", {}).get("cwd"),
-                "id": alert.get("id"),
+                "id": alert.get("rule", {}).get("id"),
             }
 
             if keep_original:
