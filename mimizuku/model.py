@@ -68,7 +68,7 @@ class Mimizuku:
         for alert in alerts:
             execve_args = " ".join(
                 [
-                    value
+                    anonymize_path(value)
                     for key, value in sorted(
                         alert.get("data", {}).get("audit", {}).get("execve", {}).items()
                     )
