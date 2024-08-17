@@ -14,7 +14,7 @@ from .utils import anonymize_path, safe_transform
 
 class Mimizuku:
     def __init__(
-        self, n_estimators=500, random_state=42, max_samples=0.8, contamination=0.03
+        self, n_estimators=1000, random_state=42, max_samples=0.8, contamination=0.01
     ):
         self.model = IsolationForest(
             n_estimators=n_estimators,
@@ -23,13 +23,14 @@ class Mimizuku:
             contamination=contamination,
         )
         self.tfidf_vectorizer = TfidfVectorizer()
+        self.tfidf_vectorizer_args = TfidfVectorizer()
+        self.tfidf_vectorizer_path = TfidfVectorizer(stop_words=None)
+        self.tfidf_vectorizer_directory = TfidfVectorizer(stop_words=None)
+        self.tfidf_vectorizer_cwd = TfidfVectorizer(stop_words=None)
+        self.tfidf_vectorizer_command = TfidfVectorizer()
+
         self.le_hostname = LabelEncoder()
-        self.le_path = LabelEncoder()
-        self.le_directory = LabelEncoder()
-        self.le_event = LabelEncoder()
         self.le_user_id = LabelEncoder()
-        self.le_command = LabelEncoder()
-        self.le_cwd = LabelEncoder()
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
         alerts = []
@@ -39,8 +40,8 @@ class Mimizuku:
                     try:
                         alert = json.loads(line)
                         if (
-                            # Wazuh messages
-                            re.match(r"2[0-9]{2}", str(alert["rule"]["id"]))
+                            # change file messages
+                            re.match(r"55[0-9]", str(alert["rule"]["id"]))
                             # Access control messages
                             or re.match(r"25[0-9]{2}", str(alert["rule"]["id"]))
                             # Cron messages
@@ -78,15 +79,16 @@ class Mimizuku:
 
             path = alert.get("syscheck", {}).get("path")
             directory = os.path.dirname(path) if path else "N/A"
+            cwd = alert.get("data", {}).get("audit", {}).get("cwd") or "N/A"
+
             row = {
                 "hostname": re.sub("[0-9]", "*", alert.get("agent", {}).get("name")),
-                "path": anonymize_path(path),
-                "directory": directory,
-                "event": alert.get("syscheck", {}).get("event"),
-                "user_id": alert.get("data", {}).get("audit", {}).get("auid"),
-                "command": alert.get("data", {}).get("audit", {}).get("command"),
+                "path": anonymize_path(path).replace("/", " "),
+                "directory": directory.replace("/", " "),
+                "user_id": alert.get("data", {}).get("audit", {}).get("auid", ""),
+                "command": alert.get("data", {}).get("audit", {}).get("command", ""),
                 "args": execve_args,
-                "cwd": alert.get("data", {}).get("audit", {}).get("cwd"),
+                "cwd": cwd.replace("/", " "),
                 "id": alert.get("rule", {}).get("id"),
             }
 
@@ -96,7 +98,6 @@ class Mimizuku:
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_path": path,
                         "original_directory": directory,
-                        "original_event": alert.get("syscheck", {}).get("event"),
                         "original_user_id": alert.get("data", {})
                         .get("audit", {})
                         .get("auid"),
@@ -114,24 +115,33 @@ class Mimizuku:
 
         df = pd.DataFrame(processed_data)
 
+        if len(df) == 0:
+            raise ValueError("No alerts were found in the input data")
+
         if fit:
             df["hostname_encoded"] = self.le_hostname.fit_transform(df["hostname"])
-            df["path_encoded"] = self.le_path.fit_transform(df["path"])
-            df["directory_encoded"] = self.le_directory.fit_transform(df["directory"])
-            df["event_encoded"] = self.le_event.fit_transform(df["event"])
             df["user_id_encoded"] = self.le_user_id.fit_transform(df["user_id"])
-            df["command_encoded"] = self.le_command.fit_transform(df["command"])
-            df["cwd_encoded"] = self.le_cwd.fit_transform(df["cwd"])
-            args_tfidf = self.tfidf_vectorizer.fit_transform(df["args"]).toarray()
+            args_tfidf = self.tfidf_vectorizer_args.fit_transform(df["args"]).toarray()
+            path_tfidf = self.tfidf_vectorizer_path.fit_transform(df["path"]).toarray()
+            directory_tfidf = self.tfidf_vectorizer_directory.fit_transform(
+                df["directory"]
+            ).toarray()
+            cwd_tfidf = self.tfidf_vectorizer_cwd.fit_transform(df["cwd"]).toarray()
+            command_tfidf = self.tfidf_vectorizer_command.fit_transform(
+                df["command"]
+            ).toarray()
         else:
             df["hostname_encoded"] = safe_transform(self.le_hostname, df["hostname"])
-            df["path_encoded"] = safe_transform(self.le_path, df["path"])
-            df["directory_encoded"] = safe_transform(self.le_directory, df["directory"])
-            df["event_encoded"] = safe_transform(self.le_event, df["event"])
             df["user_id_encoded"] = safe_transform(self.le_user_id, df["user_id"])
-            df["command_encoded"] = safe_transform(self.le_command, df["command"])
-            df["cwd_encoded"] = safe_transform(self.le_cwd, df["cwd"])
-            args_tfidf = self.tfidf_vectorizer.transform(df["args"]).toarray()
+            args_tfidf = self.tfidf_vectorizer_args.transform(df["args"]).toarray()
+            path_tfidf = self.tfidf_vectorizer_path.transform(df["path"]).toarray()
+            directory_tfidf = self.tfidf_vectorizer_directory.transform(
+                df["directory"]
+            ).toarray()
+            cwd_tfidf = self.tfidf_vectorizer_cwd.transform(df["cwd"]).toarray()
+            command_tfidf = self.tfidf_vectorizer_command.transform(
+                df["command"]
+            ).toarray()
 
         X = pd.concat(
             [
@@ -139,15 +149,14 @@ class Mimizuku:
                     [
                         "id",
                         "hostname_encoded",
-                        "path_encoded",
-                        "directory_encoded",
-                        "event_encoded",
                         "user_id_encoded",
-                        "command_encoded",
-                        "cwd_encoded",
                     ]
                 ],
                 pd.DataFrame(args_tfidf, index=df.index),
+                pd.DataFrame(path_tfidf, index=df.index),
+                pd.DataFrame(directory_tfidf, index=df.index),
+                pd.DataFrame(cwd_tfidf, index=df.index),
+                pd.DataFrame(command_tfidf, index=df.index),
             ],
             axis=1,
         )
@@ -156,38 +165,44 @@ class Mimizuku:
         return X, df
 
     def fit(self, data):
-        X_train, _ = self.load_and_preprocess(data, fit=True)
-        self.model.fit(X_train)
+        try:
+            X_train, _ = self.load_and_preprocess(data, fit=True)
+            self.model.fit(X_train)
+        except ValueError as e:
+            print(f"Error: {e}")
 
     def predict(self, data):
-        X_test, df_test = self.load_and_preprocess(data, fit=False, keep_original=True)
-        anomalies = self.model.predict(X_test)
-        anomalies_df = df_test[anomalies == -1]
-        return anomalies_df[
-            [
-                "original_hostname",
-                "original_path",
-                "original_directory",
-                "original_event",
-                "original_user_id",
-                "original_command",
-                "original_args",
-                "original_cwd",
+        try:
+            X_test, df_test = self.load_and_preprocess(
+                data, fit=False, keep_original=True
+            )
+            anomalies = self.model.predict(X_test)
+            anomalies_df = df_test[anomalies == -1]
+            return anomalies_df[
+                [
+                    "original_hostname",
+                    "original_path",
+                    "original_directory",
+                    "original_user_id",
+                    "original_command",
+                    "original_args",
+                    "original_cwd",
+                ]
             ]
-        ]
+        except ValueError as e:
+            print(f"Error: {e}")
 
     def save_model(self, model_path):
         joblib.dump(
             {
                 "model": self.model,
-                "tfidf_vectorizer": self.tfidf_vectorizer,
+                "tfidf_vectorizer_args": self.tfidf_vectorizer_args,
+                "tfidf_vectorizer_path": self.tfidf_vectorizer_path,
+                "tfidf_vectorizer_directory": self.tfidf_vectorizer_directory,
+                "tfidf_vectorizer_cwd": self.tfidf_vectorizer_cwd,
+                "tfidf_vectorizer_command": self.tfidf_vectorizer_command,
                 "le_hostname": self.le_hostname,
-                "le_path": self.le_path,
-                "le_directory": self.le_directory,
-                "le_event": self.le_event,
                 "le_user_id": self.le_user_id,
-                "le_command": self.le_command,
-                "le_cwd": self.le_cwd,
             },
             model_path,
         )
@@ -197,12 +212,13 @@ class Mimizuku:
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku()
         mimizuku.model = saved_objects["model"]
-        mimizuku.tfidf_vectorizer = saved_objects["tfidf_vectorizer"]
+        mimizuku.tfidf_vectorizer_args = saved_objects["tfidf_vectorizer_args"]
+        mimizuku.tfidf_vectorizer_path = saved_objects["tfidf_vectorizer_path"]
+        mimizuku.tfidf_vectorizer_directory = saved_objects[
+            "tfidf_vectorizer_directory"
+        ]
+        mimizuku.tfidf_vectorizer_cwd = saved_objects["tfidf_vectorizer_cwd"]
+        mimizuku.tfidf_vectorizer_command = saved_objects["tfidf_vectorizer_command"]
         mimizuku.le_hostname = saved_objects["le_hostname"]
-        mimizuku.le_path = saved_objects["le_path"]
-        mimizuku.le_directory = saved_objects["le_directory"]
-        mimizuku.le_event = saved_objects["le_event"]
         mimizuku.le_user_id = saved_objects["le_user_id"]
-        mimizuku.le_command = saved_objects["le_command"]
-        mimizuku.le_cwd = saved_objects["le_cwd"]
         return mimizuku
