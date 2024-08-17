@@ -47,6 +47,8 @@ class Mimizuku:
 
         processed_data = []
         for alert in alerts:
+            if "syscheck" not in alert:
+                continue
             path = alert.get("syscheck", {}).get("path")
             directory = os.path.dirname(path) if path else "N/A"
 
