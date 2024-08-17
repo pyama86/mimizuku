@@ -83,11 +83,11 @@ class Mimizuku:
             ).toarray()
         else:
             df["hostname_encoded"] = safe_transform(self.le_hostname, df["hostname"])
-            df["path_encoded"] = safe_transform(
-                self.tfidf_vectorizer_path, df["path"]
+            df["path_encoded"] = self.tfidf_vectorizer_path.transform(
+                df["path"]
             ).toarray()
-            df["directory_encoded"] = safe_transform(
-                self.tfidf_vectorizer_directory, df["directory"]
+            df["directory_encoded"] = self.tfidf_vectorizer_directory.transform(
+                df["directory"]
             ).toarray()
         X = df[
             [
