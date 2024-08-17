@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="mimizuku",
-    version="0.1.5",
+    version="0.1.6",
     packages=find_packages(),
     install_requires=[
         "numpy",
