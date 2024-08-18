@@ -73,6 +73,10 @@ class Mimizuku:
         size_uid_features = df[["size_after", "uid_after"]].values
 
         X = np.hstack([tfidf_features.toarray(), size_uid_features])
+        df.drop(
+            columns=["hostname", "path", "size_after", "uid_after", "event"],
+            inplace=True,
+        )
         return X, df
 
     def fit(self, data):
