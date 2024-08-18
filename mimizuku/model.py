@@ -1,29 +1,19 @@
 import json
-import os
 import re
 
 import joblib
+import numpy as np
 import pandas as pd
-from scipy.sparse import hstack
-from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import LabelEncoder
-
-from .utils import anonymize_path, safe_transform
+from sklearn.neighbors import LocalOutlierFactor
 
 
 class Mimizuku:
-    def __init__(
-        self, n_estimators=1000, random_state=42, max_samples=0.8, contamination=0.01
-    ):
-        self.model = IsolationForest(
-            n_estimators=n_estimators,
-            random_state=random_state,
-            max_samples=max_samples,
-            contamination=contamination,
+    def __init__(self, n_neighbors=15, contamination=0.05):
+        self.model = LocalOutlierFactor(
+            n_neighbors=n_neighbors, contamination=contamination, novelty=True
         )
-        self.tfidf_vectorizer_path = TfidfVectorizer(stop_words=None)
-        self.le_hostname = LabelEncoder()
+        self.tfidf_vectorizer = TfidfVectorizer()
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
         alerts = []
@@ -32,9 +22,8 @@ class Mimizuku:
                 for line in json_file:
                     try:
                         alert = json.loads(line)
-                        if (
-                            # change file messages
-                            re.match(r"55[0-9]", str(alert["rule"]["id"]))
+                        if "syscheck" in alert and re.match(
+                            r"55[0-9]", str(alert["rule"]["id"])
                         ):
                             alerts.append(alert)
                     except json.JSONDecodeError as e:
@@ -46,14 +35,18 @@ class Mimizuku:
 
         processed_data = []
         for alert in alerts:
-            if "syscheck" not in alert:
-                continue
-            path = alert.get("syscheck", {}).get("path")
+            syscheck = alert.get("syscheck", {})
+            path = syscheck.get("path")
+            size_after = syscheck.get("size_after", 0)
+            uid_after = syscheck.get("uid_after", 0)
+            event = syscheck.get("event", "")
 
             row = {
-                "hostname": re.sub("[0-9]", "*", alert.get("agent", {}).get("name")),
-                "path": anonymize_path(path).replace("/", " "),
-                "id": alert.get("rule", {}).get("id"),
+                "hostname": alert.get("agent", {}).get("name"),
+                "path": path,
+                "size_after": size_after,
+                "uid_after": uid_after,
+                "event": event,
             }
 
             if keep_original:
@@ -71,14 +64,15 @@ class Mimizuku:
         if len(df) == 0:
             raise ValueError("No alerts were found in the input data")
 
+        combined_text = df["hostname"] + " " + df["path"] + " " + df["event"]
         if fit:
-            df["hostname_encoded"] = self.le_hostname.fit_transform(df["hostname"])
-            path_tfidf = self.tfidf_vectorizer_path.fit_transform(df["path"])
+            tfidf_features = self.tfidf_vectorizer.fit_transform(combined_text)
         else:
-            df["hostname_encoded"] = safe_transform(self.le_hostname, df["hostname"])
-            path_tfidf = self.tfidf_vectorizer_path.transform(df["path"])
+            tfidf_features = self.tfidf_vectorizer.transform(combined_text)
 
-        X = hstack([path_tfidf, df["hostname_encoded"].values[:, None]])
+        size_uid_features = df[["size_after", "uid_after"]].values
+
+        X = np.hstack([tfidf_features.toarray(), size_uid_features])
         return X, df
 
     def fit(self, data):
@@ -114,8 +108,7 @@ class Mimizuku:
         joblib.dump(
             {
                 "model": self.model,
-                "tfidf_vectorizer_path": self.tfidf_vectorizer_path,
-                "le_hostname": self.le_hostname,
+                "tfidf_vectorizer": self.tfidf_vectorizer,
             },
             model_path,
         )
@@ -125,6 +118,5 @@ class Mimizuku:
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku()
         mimizuku.model = saved_objects["model"]
-        mimizuku.tfidf_vectorizer_path = saved_objects["tfidf_vectorizer_path"]
-        mimizuku.le_hostname = saved_objects["le_hostname"]
+        mimizuku.tfidf_vectorizer = saved_objects["tfidf_vectorizer"]
         return mimizuku
