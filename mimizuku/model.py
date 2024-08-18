@@ -77,27 +77,29 @@ class Mimizuku:
 
         if fit:
             df["hostname_encoded"] = self.le_hostname.fit_transform(df["hostname"])
-            df["path_encoded"] = self.tfidf_vectorizer_path.fit_transform(
-                df["path"]
-            ).toarray()
-            df["directory_encoded"] = self.tfidf_vectorizer_directory.fit_transform(
+            path_tfidf = self.tfidf_vectorizer_path.fit_transform(df["path"]).toarray()
+            directory_tfidf = self.tfidf_vectorizer_directory.fit_transform(
                 df["directory"]
             ).toarray()
         else:
             df["hostname_encoded"] = safe_transform(self.le_hostname, df["hostname"])
-            df["path_encoded"] = self.tfidf_vectorizer_path.transform(
-                df["path"]
-            ).toarray()
-            df["directory_encoded"] = self.tfidf_vectorizer_directory.transform(
+            path_tfidf = self.tfidf_vectorizer_path.transform(df["path"]).toarray()
+            directory_tfidf = self.tfidf_vectorizer_directory.transform(
                 df["directory"]
             ).toarray()
-        X = df[
+
+        X = pd.concat(
             [
-                "hostname_encoded",
-                "path_encoded",
-                "directory_encoded",
-            ]
-        ]
+                df[
+                    [
+                        "hostname_encoded",
+                    ]
+                ],
+                pd.DataFrame(path_tfidf, index=df.index),
+                pd.DataFrame(directory_tfidf, index=df.index),
+            ],
+            axis=1,
+        )
 
         X.columns = X.columns.astype(str)
         return X, df
@@ -107,7 +109,10 @@ class Mimizuku:
             X_train, _ = self.load_and_preprocess(data, fit=True)
             self.model.fit(X_train)
         except ValueError as e:
-            print(f"Error: {e}")
+            if "No alerts were found" in str(e):
+                pass
+            else:
+                raise e
 
     def predict(self, data):
         try:
@@ -124,7 +129,10 @@ class Mimizuku:
                 ]
             ]
         except ValueError as e:
-            print(f"Error: {e}")
+            if "No alerts were found" in str(e):
+                pass
+            else:
+                raise e
 
     def save_model(self, model_path):
         joblib.dump(
