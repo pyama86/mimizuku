@@ -3,8 +3,8 @@ import os
 import re
 
 import joblib
-import numpy as np
 import pandas as pd
+from scipy.sparse import hstack
 from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
@@ -23,7 +23,6 @@ class Mimizuku:
             contamination=contamination,
         )
         self.tfidf_vectorizer_path = TfidfVectorizer(stop_words=None)
-        self.tfidf_vectorizer_directory = TfidfVectorizer(stop_words=None)
         self.le_hostname = LabelEncoder()
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
@@ -50,12 +49,10 @@ class Mimizuku:
             if "syscheck" not in alert:
                 continue
             path = alert.get("syscheck", {}).get("path")
-            directory = os.path.dirname(path) if path else "N/A"
 
             row = {
                 "hostname": re.sub("[0-9]", "*", alert.get("agent", {}).get("name")),
                 "path": anonymize_path(path).replace("/", " "),
-                "directory": directory.replace("/", " "),
                 "id": alert.get("rule", {}).get("id"),
             }
 
@@ -64,7 +61,6 @@ class Mimizuku:
                     {
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_path": path,
-                        "original_directory": directory,
                     }
                 )
 
@@ -77,31 +73,12 @@ class Mimizuku:
 
         if fit:
             df["hostname_encoded"] = self.le_hostname.fit_transform(df["hostname"])
-            path_tfidf = self.tfidf_vectorizer_path.fit_transform(df["path"]).toarray()
-            directory_tfidf = self.tfidf_vectorizer_directory.fit_transform(
-                df["directory"]
-            ).toarray()
+            path_tfidf = self.tfidf_vectorizer_path.fit_transform(df["path"])
         else:
             df["hostname_encoded"] = safe_transform(self.le_hostname, df["hostname"])
-            path_tfidf = self.tfidf_vectorizer_path.transform(df["path"]).toarray()
-            directory_tfidf = self.tfidf_vectorizer_directory.transform(
-                df["directory"]
-            ).toarray()
+            path_tfidf = self.tfidf_vectorizer_path.transform(df["path"])
 
-        X = pd.concat(
-            [
-                df[
-                    [
-                        "hostname_encoded",
-                    ]
-                ],
-                pd.DataFrame(path_tfidf, index=df.index),
-                pd.DataFrame(directory_tfidf, index=df.index),
-            ],
-            axis=1,
-        )
-
-        X.columns = X.columns.astype(str)
+        X = hstack([path_tfidf, df["hostname_encoded"].values[:, None]])
         return X, df
 
     def fit(self, data):
@@ -125,7 +102,6 @@ class Mimizuku:
                 [
                     "original_hostname",
                     "original_path",
-                    "original_directory",
                 ]
             ]
         except ValueError as e:
@@ -139,7 +115,6 @@ class Mimizuku:
             {
                 "model": self.model,
                 "tfidf_vectorizer_path": self.tfidf_vectorizer_path,
-                "tfidf_vectorizer_directory": self.tfidf_vectorizer_directory,
                 "le_hostname": self.le_hostname,
             },
             model_path,
@@ -151,8 +126,5 @@ class Mimizuku:
         mimizuku = Mimizuku()
         mimizuku.model = saved_objects["model"]
         mimizuku.tfidf_vectorizer_path = saved_objects["tfidf_vectorizer_path"]
-        mimizuku.tfidf_vectorizer_directory = saved_objects[
-            "tfidf_vectorizer_directory"
-        ]
         mimizuku.le_hostname = saved_objects["le_hostname"]
         return mimizuku
