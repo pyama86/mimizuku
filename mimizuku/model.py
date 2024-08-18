@@ -29,7 +29,14 @@ class Mimizuku:
                     except json.JSONDecodeError as e:
                         print(f"Error decoding JSON: {e}")
         elif isinstance(data, pd.DataFrame):
-            alerts = data.to_dict("records")
+            if (
+                "syscheck" in data.columns
+                and "rule" in data.columns
+                and "id" in data["rule"]
+            ):
+                alerts = data[data["rule"]["id"].str.match(r"55[0-9]")].to_dict(
+                    "records"
+                )
         else:
             raise ValueError("Input data must be a filepath or a DataFrame")
 
