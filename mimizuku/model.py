@@ -28,15 +28,9 @@ class Mimizuku:
                             alerts.append(alert)
                     except json.JSONDecodeError as e:
                         print(f"Error decoding JSON: {e}")
-        elif isinstance(data, pd.DataFrame):
-            if (
-                "syscheck" in data.columns
-                and "rule" in data.columns
-                and "id" in data["rule"]
-            ):
-                alerts = data[data["rule"]["id"].str.match(r"55[0-9]")].to_dict(
-                    "records"
-                )
+        elif isinstance(data, dict):
+            if "syscheck" in data and re.match(r"55[0-9]", str(data["rule"]["id"])):
+                alerts.append(data)
         else:
             raise ValueError("Input data must be a filepath or a DataFrame")
 
