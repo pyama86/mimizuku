@@ -173,9 +173,9 @@ class Mimizuku:
         )
 
     @staticmethod
-    def load_model(model_path):
+    def load_model(model_path, ignore_files=[]):
         saved_objects = joblib.load(model_path)
-        mimizuku = Mimizuku()
+        mimizuku = Mimizuku(ignore_files=ignore_files)
         mimizuku.model = saved_objects["model"]
         mimizuku.hostname_vectorizer = saved_objects["hostname_vectorizer"]
         mimizuku.filename_vectorizer = saved_objects["filename_vectorizer"]
