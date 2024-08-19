@@ -37,7 +37,11 @@ class Mimizuku:
             "syscheck" in alert
             and re.match(r"55[0-9]", str(alert["rule"]["id"]))
             and int(alert["rule"]["level"]) > 0
-            and alert["syscheck"]["path"] not in self.ignore_files
+            # pathがignore_filesのパターンから開始していないこと
+            and all(
+                not alert["syscheck"]["path"].startswith(ignore_file)
+                for ignore_file in self.ignore_files
+            )
         )
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
