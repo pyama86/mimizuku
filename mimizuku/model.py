@@ -13,7 +13,7 @@ from sklearn.preprocessing import LabelEncoder
 
 
 class Mimizuku:
-    def __init__(self, n_neighbors=20, contamination=0.05):
+    def __init__(self, n_neighbors=20, contamination=0.05, ignore_files=[]):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors, contamination=contamination, novelty=True
         )
@@ -21,6 +21,7 @@ class Mimizuku:
         self.filename_vectorizer = TfidfVectorizer(sublinear_tf=True)
         self.directory_vectorizer = TfidfVectorizer(sublinear_tf=True)
         self.event_encoder = LabelEncoder()
+        self.ignore_files = ignore_files
 
     def extract_time_features(self, timestamp):
         if timestamp is None:
@@ -36,6 +37,7 @@ class Mimizuku:
             "syscheck" in alert
             and re.match(r"55[0-9]", str(alert["rule"]["id"]))
             and int(alert["rule"]["level"]) > 0
+            and alert["syscheck"]["path"] not in self.ignore_files
         )
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
