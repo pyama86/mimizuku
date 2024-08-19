@@ -3,7 +3,7 @@ import pandas as pd
 from mimizuku import Mimizuku
 
 # Initialize the model
-model = Mimizuku(contamination=0.05, n_neighbors=10)
+model = Mimizuku(contamination=0.01, n_neighbors=20)
 
 # Train the model with a log file or DataFrame
 model.fit("./training.json")

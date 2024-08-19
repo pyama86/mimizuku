@@ -1,19 +1,35 @@
 import json
+import os
 import re
+from datetime import datetime
 
 import joblib
 import numpy as np
 import pandas as pd
+from scipy.sparse import hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import LocalOutlierFactor
+from sklearn.preprocessing import LabelEncoder
 
 
 class Mimizuku:
-    def __init__(self, n_neighbors=15, contamination=0.05):
+    def __init__(self, n_neighbors=20, contamination=0.05):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors, contamination=contamination, novelty=True
         )
-        self.tfidf_vectorizer = TfidfVectorizer()
+        self.hostname_vectorizer = TfidfVectorizer()
+        self.filename_vectorizer = TfidfVectorizer(sublinear_tf=True)
+        self.directory_vectorizer = TfidfVectorizer(sublinear_tf=True)
+        self.event_encoder = LabelEncoder()
+
+    def extract_time_features(self, timestamp):
+        if timestamp is None:
+            return -1, -1
+        try:
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            return dt.hour, dt.minute
+        except ValueError:
+            return -1, -1
 
     def load_and_preprocess(self, data, fit=False, keep_original=False):
         alerts = []
@@ -38,16 +54,19 @@ class Mimizuku:
         for alert in alerts:
             syscheck = alert.get("syscheck", {})
             path = syscheck.get("path")
-            size_after = syscheck.get("size_after", 0)
-            uid_after = syscheck.get("uid_after", 0)
+            directory = os.path.dirname(path)
+            filename = os.path.basename(path)
             event = syscheck.get("event", "")
+            timestamp = alert.get("timestamp")
+            hour, minute = self.extract_time_features(timestamp)
 
             row = {
-                "hostname": alert.get("agent", {}).get("name"),
-                "path": path,
-                "size_after": size_after,
-                "uid_after": uid_after,
+                "hostname": re.sub("[0-9]", "*", alert.get("agent", {}).get("name")),
+                "filename": filename,
+                "directory": directory,
                 "event": event,
+                "hour": hour,
+                "minute": minute,
             }
 
             if keep_original:
@@ -65,17 +84,42 @@ class Mimizuku:
         if len(df) == 0:
             raise ValueError("No alerts were found in the input data")
 
-        combined_text = df["hostname"] + " " + df["path"] + " " + df["event"]
         if fit:
-            tfidf_features = self.tfidf_vectorizer.fit_transform(combined_text)
+            hostname_features = self.hostname_vectorizer.fit_transform(df["hostname"])
+            filename_features = self.filename_vectorizer.fit_transform(df["filename"])
+            directory_features = self.directory_vectorizer.fit_transform(
+                df["directory"]
+            )
+            df["event_encoded"] = self.event_encoder.fit_transform(df["event"])
         else:
-            tfidf_features = self.tfidf_vectorizer.transform(combined_text)
+            hostname_features = self.hostname_vectorizer.transform(df["hostname"])
+            filename_features = self.filename_vectorizer.transform(df["filename"])
+            directory_features = self.directory_vectorizer.transform(df["directory"])
+            df["event_encoded"] = self.event_encoder.transform(df["event"])
 
-        size_uid_features = df[["size_after", "uid_after"]].values
+        time_features = df[["hour", "minute"]].values
+        event_features = df[["event_encoded"]].values
 
-        X = np.hstack([tfidf_features.toarray(), size_uid_features])
+        X = hstack(
+            [
+                hostname_features,
+                filename_features,
+                directory_features,
+                event_features,
+                time_features,
+            ]
+        )
+
         df.drop(
-            columns=["hostname", "path", "size_after", "uid_after", "event"],
+            columns=[
+                "hostname",
+                "filename",
+                "directory",
+                "event",
+                "hour",
+                "minute",
+                "event_encoded",
+            ],
             inplace=True,
         )
         return X, df
@@ -113,7 +157,10 @@ class Mimizuku:
         joblib.dump(
             {
                 "model": self.model,
-                "tfidf_vectorizer": self.tfidf_vectorizer,
+                "hostname_vectorizer": self.hostname_vectorizer,
+                "filename_vectorizer": self.filename_vectorizer,
+                "directory_vectorizer": self.directory_vectorizer,
+                "event_encoder": self.event_encoder,
             },
             model_path,
         )
@@ -123,5 +170,8 @@ class Mimizuku:
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku()
         mimizuku.model = saved_objects["model"]
-        mimizuku.tfidf_vectorizer = saved_objects["tfidf_vectorizer"]
+        mimizuku.hostname_vectorizer = saved_objects["hostname_vectorizer"]
+        mimizuku.filename_vectorizer = saved_objects["filename_vectorizer"]
+        mimizuku.directory_vectorizer = saved_objects["directory_vectorizer"]
+        mimizuku.event_encoder = saved_objects["event_encoder"]
         return mimizuku
