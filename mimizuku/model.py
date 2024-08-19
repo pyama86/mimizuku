@@ -72,9 +72,9 @@ class Mimizuku:
             hour, minute = self.extract_time_features(timestamp)
 
             row = {
-                "hostname": re.sub("[0-9]", "*", alert.get("agent", {}).get("name")),
-                "filename": filename,
-                "directory": directory,
+                "hostname": re.sub("[0-9]", "", alert.get("agent", {}).get("name")),
+                "filename": re.sub("[0-9]", "", filename),
+                "directory": re.sub("[0-9]", "", directory),
                 "event": event,
                 "hour": hour,
                 "minute": minute,
