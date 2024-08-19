@@ -31,6 +31,13 @@ class Mimizuku:
         except ValueError:
             return -1, -1
 
+    def is_target_event(self, alert):
+        return (
+            "syscheck" in alert
+            and re.match(r"55[0-9]", str(alert["rule"]["id"]))
+            and int(alert["rule"]["level"]) > 0
+        )
+
     def load_and_preprocess(self, data, fit=False, keep_original=False):
         alerts = []
         if isinstance(data, str):
@@ -38,14 +45,12 @@ class Mimizuku:
                 for line in json_file:
                     try:
                         alert = json.loads(line)
-                        if "syscheck" in alert and re.match(
-                            r"55[0-9]", str(alert["rule"]["id"])
-                        ):
+                        if self.is_target_event(alert):
                             alerts.append(alert)
                     except json.JSONDecodeError as e:
                         print(f"Error decoding JSON: {e}")
         elif isinstance(data, dict):
-            if "syscheck" in data and re.match(r"55[0-9]", str(data["rule"]["id"])):
+            if self.is_target_event(data):
                 alerts.append(data)
         else:
             raise ValueError("Input data must be a filepath or a DataFrame")
