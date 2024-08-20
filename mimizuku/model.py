@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 
 import joblib
-import numpy as np
 import pandas as pd
 from scipy.sparse import hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -15,7 +14,10 @@ from sklearn.preprocessing import LabelEncoder
 class Mimizuku:
     def __init__(self, n_neighbors=20, contamination=0.05, ignore_files=[]):
         self.model = LocalOutlierFactor(
-            n_neighbors=n_neighbors, contamination=contamination, novelty=True
+            n_neighbors=n_neighbors,
+            contamination=contamination,
+            novelty=True,
+            n_jobs=-1,
         )
         self.hostname_vectorizer = TfidfVectorizer()
         self.filename_vectorizer = TfidfVectorizer(sublinear_tf=True)
@@ -139,6 +141,7 @@ class Mimizuku:
     def fit(self, data):
         try:
             X_train, _ = self.load_and_preprocess(data, fit=True)
+            print("Fitting the model...")
             self.model.fit(X_train)
         except ValueError as e:
             if "No alerts were found" in str(e):
@@ -151,6 +154,7 @@ class Mimizuku:
             X_test, df_test = self.load_and_preprocess(
                 data, fit=False, keep_original=True
             )
+            print("Predicting anomalies...")
             anomalies = self.model.predict(X_test)
             anomalies_df = df_test[anomalies == -1]
             return anomalies_df[
