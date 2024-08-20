@@ -85,6 +85,7 @@ class Mimizuku:
                     {
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_path": path,
+                        "original_event": event,
                     }
                 )
 
