@@ -1,14 +1,19 @@
+import hashlib
 import os
 import re
-from datetime import datetime
 
 import joblib
+import numpy as np
 import pandas as pd
 import ujson as json
-from scipy.sparse import hstack
-from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import csr_matrix
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import LabelEncoder
+
+
+def md5_to_vector(md5_hash):
+    hex_to_int = {char: idx for idx, char in enumerate("0123456789abcdef")}
+    return [hex_to_int[char] for char in md5_hash]
 
 
 class Mimizuku:
@@ -19,9 +24,6 @@ class Mimizuku:
             novelty=True,
             n_jobs=-1,
         )
-        self.hostname_vectorizer = TfidfVectorizer()
-        self.filename_vectorizer = TfidfVectorizer(sublinear_tf=True)
-        self.directory_vectorizer = TfidfVectorizer(sublinear_tf=True)
         self.event_encoder = LabelEncoder()
         self.ignore_files = ignore_files
 
@@ -30,7 +32,6 @@ class Mimizuku:
             "syscheck" in alert
             and re.match(r"55[0-9]", str(alert["rule"]["id"]))
             and int(alert["rule"]["level"]) > 0
-            # pathがignore_filesのパターンから開始していないこと
             and all(
                 not alert["syscheck"]["path"].startswith(ignore_file)
                 for ignore_file in self.ignore_files
@@ -54,23 +55,25 @@ class Mimizuku:
         else:
             raise ValueError("Input data must be a filepath or a DataFrame")
 
-        processed_data = []
+        vectorized_data = []
+        original_data = []
         for alert in alerts:
             syscheck = alert.get("syscheck", {})
             path = syscheck.get("path")
-            directory = os.path.dirname(path)
-            filename = os.path.basename(path)
             event = syscheck.get("event", "")
+            filename_vector = md5_to_vector(
+                hashlib.md5(
+                    re.sub(
+                        r"(\.[a-zA-Z0-9]+)\..*", r"\1.*", re.sub("[0-9]", "", path)
+                    ).encode()
+                ).hexdigest()
+            )
 
-            row = {
-                "hostname": re.sub("[0-9]", "", alert.get("agent", {}).get("name")),
-                "filename": re.sub("[0-9]", "", filename),
-                "directory": re.sub("[0-9]", "", directory),
-                "event": event,
-            }
+            combined_vector = np.hstack([filename_vector])
+            vectorized_data.append(combined_vector)
 
             if keep_original:
-                row.update(
+                original_data.append(
                     {
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_path": path,
@@ -78,47 +81,11 @@ class Mimizuku:
                     }
                 )
 
-            processed_data.append(row)
-
-        df = pd.DataFrame(processed_data)
-
-        if len(df) == 0:
+        if len(vectorized_data) == 0:
             raise ValueError("No alerts were found in the input data")
 
-        if fit:
-            hostname_features = self.hostname_vectorizer.fit_transform(df["hostname"])
-            filename_features = self.filename_vectorizer.fit_transform(df["filename"])
-            directory_features = self.directory_vectorizer.fit_transform(
-                df["directory"]
-            )
-            df["event_encoded"] = self.event_encoder.fit_transform(df["event"])
-        else:
-            hostname_features = self.hostname_vectorizer.transform(df["hostname"])
-            filename_features = self.filename_vectorizer.transform(df["filename"])
-            directory_features = self.directory_vectorizer.transform(df["directory"])
-            df["event_encoded"] = self.event_encoder.transform(df["event"])
-
-        event_features = df[["event_encoded"]].values
-
-        X = hstack(
-            [
-                hostname_features,
-                filename_features,
-                directory_features,
-                event_features,
-            ]
-        )
-
-        df.drop(
-            columns=[
-                "hostname",
-                "filename",
-                "directory",
-                "event",
-                "event_encoded",
-            ],
-            inplace=True,
-        )
+        X = csr_matrix(np.array(vectorized_data))
+        df = pd.DataFrame(original_data)
         return X, df
 
     def fit(self, data):
@@ -144,6 +111,7 @@ class Mimizuku:
                 [
                     "original_hostname",
                     "original_path",
+                    "original_event",
                 ]
             ]
         except ValueError as e:
@@ -156,9 +124,6 @@ class Mimizuku:
         joblib.dump(
             {
                 "model": self.model,
-                "hostname_vectorizer": self.hostname_vectorizer,
-                "filename_vectorizer": self.filename_vectorizer,
-                "directory_vectorizer": self.directory_vectorizer,
                 "event_encoder": self.event_encoder,
             },
             model_path,
@@ -169,8 +134,5 @@ class Mimizuku:
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku(ignore_files=ignore_files)
         mimizuku.model = saved_objects["model"]
-        mimizuku.hostname_vectorizer = saved_objects["hostname_vectorizer"]
-        mimizuku.filename_vectorizer = saved_objects["filename_vectorizer"]
-        mimizuku.directory_vectorizer = saved_objects["directory_vectorizer"]
         mimizuku.event_encoder = saved_objects["event_encoder"]
         return mimizuku
