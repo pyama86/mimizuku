@@ -1,10 +1,10 @@
-import json
 import os
 import re
 from datetime import datetime
 
 import joblib
 import pandas as pd
+import ujson as json
 from scipy.sparse import hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import LocalOutlierFactor
@@ -24,15 +24,6 @@ class Mimizuku:
         self.directory_vectorizer = TfidfVectorizer(sublinear_tf=True)
         self.event_encoder = LabelEncoder()
         self.ignore_files = ignore_files
-
-    def extract_time_features(self, timestamp):
-        if timestamp is None:
-            return -1, -1
-        try:
-            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return dt.hour, dt.minute
-        except ValueError:
-            return -1, -1
 
     def is_target_event(self, alert):
         return (
@@ -70,16 +61,12 @@ class Mimizuku:
             directory = os.path.dirname(path)
             filename = os.path.basename(path)
             event = syscheck.get("event", "")
-            timestamp = alert.get("timestamp")
-            hour, minute = self.extract_time_features(timestamp)
 
             row = {
                 "hostname": re.sub("[0-9]", "", alert.get("agent", {}).get("name")),
                 "filename": re.sub("[0-9]", "", filename),
                 "directory": re.sub("[0-9]", "", directory),
                 "event": event,
-                "hour": hour,
-                "minute": minute,
             }
 
             if keep_original:
@@ -111,7 +98,6 @@ class Mimizuku:
             directory_features = self.directory_vectorizer.transform(df["directory"])
             df["event_encoded"] = self.event_encoder.transform(df["event"])
 
-        time_features = df[["hour", "minute"]].values
         event_features = df[["event_encoded"]].values
 
         X = hstack(
@@ -120,7 +106,6 @@ class Mimizuku:
                 filename_features,
                 directory_features,
                 event_features,
-                time_features,
             ]
         )
 
@@ -130,8 +115,6 @@ class Mimizuku:
                 "filename",
                 "directory",
                 "event",
-                "hour",
-                "minute",
                 "event_encoded",
             ],
             inplace=True,
