@@ -1,18 +1,18 @@
 import hashlib
-import os
 import re
 
 import joblib
 import numpy as np
+import orjson as json
 import pandas as pd
-import ujson as json
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import LabelEncoder
 
+hex_to_int = {char: idx for idx, char in enumerate("0123456789abcdef")}
+
 
 def md5_to_vector(md5_hash):
-    hex_to_int = {char: idx for idx, char in enumerate("0123456789abcdef")}
     return [hex_to_int[char] for char in md5_hash]
 
 
