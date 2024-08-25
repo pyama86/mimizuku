@@ -2,7 +2,6 @@ import hashlib
 import re
 
 import joblib
-import numpy as np
 import orjson as json
 import pandas as pd
 from scipy.sparse import csr_matrix
@@ -38,12 +37,15 @@ class Mimizuku:
             )
         )
 
-    def load_and_preprocess(self, data, fit=False, keep_original=False):
+    def load_and_preprocess(self, data, keep_original=False):
         alerts = []
         if isinstance(data, str):
             with open(data, encoding="utf-8", errors="replace") as json_file:
                 for line in json_file:
                     try:
+                        if not re.search(r'"id":\s*"55[0-9]"', line):
+                            continue
+
                         alert = json.loads(line)
                         if self.is_target_event(alert):
                             alerts.append(alert)
@@ -69,8 +71,7 @@ class Mimizuku:
                 ).hexdigest()
             )
 
-            combined_vector = np.hstack([filename_vector])
-            vectorized_data.append(combined_vector)
+            vectorized_data.append(filename_vector)
 
             if keep_original:
                 original_data.append(
@@ -83,14 +84,13 @@ class Mimizuku:
 
         if len(vectorized_data) == 0:
             raise ValueError("No alerts were found in the input data")
-
-        X = csr_matrix(np.array(vectorized_data))
+        X = csr_matrix(vectorized_data)
         df = pd.DataFrame(original_data)
         return X, df
 
     def fit(self, data):
         try:
-            X_train, _ = self.load_and_preprocess(data, fit=True)
+            X_train, _ = self.load_and_preprocess(data)
             print("Fitting the model...")
             self.model.fit(X_train)
         except ValueError as e:
@@ -101,9 +101,7 @@ class Mimizuku:
 
     def predict(self, data):
         try:
-            X_test, df_test = self.load_and_preprocess(
-                data, fit=False, keep_original=True
-            )
+            X_test, df_test = self.load_and_preprocess(data, keep_original=True)
             print("Predicting anomalies...")
             anomalies = self.model.predict(X_test)
             anomalies_df = df_test[anomalies == -1]
