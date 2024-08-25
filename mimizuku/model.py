@@ -22,6 +22,11 @@ class Mimizuku:
             max_df=0.2,
         )
 
+    def replace_temp_strings(self, path):
+        pattern = r"[a-f0-9]{7,40}"
+        modified_path = re.sub(pattern, "", path)
+        return modified_path
+
     def is_target_event(self, alert):
         return (
             "syscheck" in alert
@@ -66,7 +71,7 @@ class Mimizuku:
                 re.sub(
                     r"[\.\-_/]",
                     " ",
-                    re.sub(r"(\.[a-zA-Z0-9]+)\..*", r"\1.*", re.sub("[0-9]", "", path)),
+                    self.replace_temp_strings(path),
                 )
             )
 
