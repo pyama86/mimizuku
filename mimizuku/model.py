@@ -1,18 +1,11 @@
-import hashlib
 import re
 
 import joblib
 import orjson as json
 import pandas as pd
-from scipy.sparse import csr_matrix
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import LabelEncoder
-
-hex_to_int = {char: idx for idx, char in enumerate("0123456789abcdef")}
-
-
-def md5_to_vector(md5_hash):
-    return [hex_to_int[char] for char in md5_hash]
 
 
 class Mimizuku:
@@ -25,6 +18,9 @@ class Mimizuku:
         )
         self.event_encoder = LabelEncoder()
         self.ignore_files = ignore_files
+        self.vectorizer = TfidfVectorizer(
+            max_df=0.2,
+        )
 
     def is_target_event(self, alert):
         return (
@@ -37,7 +33,10 @@ class Mimizuku:
             )
         )
 
-    def load_and_preprocess(self, data, keep_original=False):
+    def filename_to_vector(self, filename):
+        return self.vectorizer.transform([filename])
+
+    def load_and_preprocess(self, data, keep_original=False, fit=False):
         alerts = []
         if isinstance(data, str):
             with open(data, encoding="utf-8", errors="replace") as json_file:
@@ -57,21 +56,19 @@ class Mimizuku:
         else:
             raise ValueError("Input data must be a filepath or a DataFrame")
 
-        vectorized_data = []
         original_data = []
+        filenames = []
         for alert in alerts:
             syscheck = alert.get("syscheck", {})
             path = syscheck.get("path")
             event = syscheck.get("event", "")
-            filename_vector = md5_to_vector(
-                hashlib.md5(
-                    re.sub(
-                        r"(\.[a-zA-Z0-9]+)\..*", r"\1.*", re.sub("[0-9]", "", path)
-                    ).encode()
-                ).hexdigest()
+            filenames.append(
+                re.sub(
+                    r"[\.\-_/]",
+                    " ",
+                    re.sub(r"(\.[a-zA-Z0-9]+)\..*", r"\1.*", re.sub("[0-9]", "", path)),
+                )
             )
-
-            vectorized_data.append(filename_vector)
 
             if keep_original:
                 original_data.append(
@@ -82,15 +79,20 @@ class Mimizuku:
                     }
                 )
 
-        if len(vectorized_data) == 0:
+        if len(filenames) == 0:
             raise ValueError("No alerts were found in the input data")
-        X = csr_matrix(vectorized_data)
+
+        if fit:
+            X = self.vectorizer.fit_transform(filenames)
+        else:
+            X = self.vectorizer.transform(filenames)
+
         df = pd.DataFrame(original_data)
         return X, df
 
     def fit(self, data):
         try:
-            X_train, _ = self.load_and_preprocess(data)
+            X_train, _ = self.load_and_preprocess(data, fit=True)
             print("Fitting the model...")
             self.model.fit(X_train)
         except ValueError as e:
@@ -123,6 +125,7 @@ class Mimizuku:
             {
                 "model": self.model,
                 "event_encoder": self.event_encoder,
+                "vectorizer": self.vectorizer,
             },
             model_path,
         )
@@ -133,4 +136,5 @@ class Mimizuku:
         mimizuku = Mimizuku(ignore_files=ignore_files)
         mimizuku.model = saved_objects["model"]
         mimizuku.event_encoder = saved_objects["event_encoder"]
+        mimizuku.vectorizer = saved_objects["vectorizer"]
         return mimizuku
