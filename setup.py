@@ -2,14 +2,14 @@ from setuptools import find_packages, setup
 
 setup(
     name="mimizuku",
-    version="0.2.15",
+    version="0.2.16",
     packages=find_packages(),
     install_requires=[
         "numpy",
         "pandas",
         "scikit-learn",
         "joblib",
-        "ujson",
+        "orjson",
     ],
     entry_points={
         "console_scripts": [
