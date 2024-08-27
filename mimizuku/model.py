@@ -3,7 +3,7 @@ import re
 import joblib
 import orjson as json
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import LabelEncoder
 
@@ -18,13 +18,15 @@ class Mimizuku:
         )
         self.event_encoder = LabelEncoder()
         self.ignore_files = ignore_files
-        self.vectorizer = TfidfVectorizer(
-            max_df=0.2,
+        self.vectorizer = HashingVectorizer(
+            n_features=2**20,
         )
 
     def replace_temp_strings(self, path):
         pattern = r"[a-f0-9]{7,40}"
         modified_path = re.sub(pattern, "", path)
+        modified_path = re.sub(r"[\d]+", "", modified_path)
+        print(f"modified_path: {modified_path}")
         return modified_path
 
     def is_target_event(self, alert):
