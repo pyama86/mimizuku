@@ -112,7 +112,8 @@ class Mimizuku:
 
     def predict(self, data):
         try:
-            X_test, df_test = self.load_and_preprocess(data, keep_original=True)
+            X_test, df_test = self.load_and_preprocess(
+                data, keep_original=True)
             print("Predicting anomalies...")
             anomalies = self.model.predict(X_test)
 
@@ -150,10 +151,10 @@ class Mimizuku:
         )
 
     @staticmethod
-    def load_model(model_path, ignore_files=[]):
-        saved_objects = joblib.load(model_path)
-        mimizuku = Mimizuku(ignore_files=ignore_files)
-        mimizuku.model = saved_objects["model"]
-        mimizuku.event_encoder = saved_objects["event_encoder"]
-        mimizuku.vectorizer = saved_objects["vectorizer"]
+    def load_model(model_path, ignore_files=[], abuse_files=[])):
+    saved_objects = joblib.load(model_path)
+        mimizuku= Mimizuku(ignore_files=ignore_files, abuse_files=abuse_files)
+        mimizuku.model= saved_objects["model"]
+        mimizuku.event_encoder= saved_objects["event_encoder"]
+        mimizuku.vectorizer= saved_objects["vectorizer"]
         return mimizuku
