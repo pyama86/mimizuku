@@ -9,7 +9,9 @@ from sklearn.preprocessing import LabelEncoder
 
 
 class Mimizuku:
-    def __init__(self, n_neighbors=20, contamination=0.05, ignore_files=[]):
+    def __init__(
+        self, n_neighbors=20, contamination=0.05, abuse_files=[], ignore_files=[]
+    ):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors,
             contamination=contamination,
@@ -21,12 +23,12 @@ class Mimizuku:
         self.vectorizer = HashingVectorizer(
             n_features=2**20,
         )
+        self.abuse_files = abuse_files
 
     def replace_temp_strings(self, path):
         pattern = r"[a-f0-9]{7,40}"
         modified_path = re.sub(pattern, "", path)
         modified_path = re.sub(r"[\d]+", "", modified_path)
-        print(f"modified_path: {modified_path}")
         return modified_path
 
     def is_target_event(self, alert):
@@ -113,7 +115,17 @@ class Mimizuku:
             X_test, df_test = self.load_and_preprocess(data, keep_original=True)
             print("Predicting anomalies...")
             anomalies = self.model.predict(X_test)
+
             anomalies_df = df_test[anomalies == -1]
+            # abuse_filesに含まれるファイル名を持つ行も異常として追加
+            for abuse_file in self.abuse_files:
+                additional_anomalies = df_test[
+                    df_test["original_path"].str.contains(abuse_file)
+                ]
+                anomalies_df = pd.concat(
+                    [anomalies_df, additional_anomalies]
+                ).drop_duplicates()
+
             return anomalies_df[
                 [
                     "original_hostname",
