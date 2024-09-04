@@ -10,7 +10,12 @@ from sklearn.preprocessing import LabelEncoder
 
 class Mimizuku:
     def __init__(
-        self, n_neighbors=20, contamination=0.05, abuse_files=[], ignore_files=[]
+        self,
+        n_neighbors=20,
+        contamination=0.05,
+        abuse_files=[],
+        ignore_files=[],
+        ignore_effective_users=[],
     ):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors,
@@ -24,6 +29,7 @@ class Mimizuku:
             n_features=2**20,
         )
         self.abuse_files = abuse_files
+        self.ignore_effective_users = ignore_effective_users
 
     def replace_temp_strings(self, path):
         pattern = r"[a-f0-9]{7,40}"
@@ -39,6 +45,10 @@ class Mimizuku:
             and all(
                 not alert["syscheck"]["path"].startswith(ignore_file)
                 for ignore_file in self.ignore_files
+            )
+            and all(
+                alert["syscheck"]["audit"]["effective_user"]["name"] != ignore_user
+                for ignore_user in self.ignore_effective_users
             )
         )
 
@@ -71,6 +81,9 @@ class Mimizuku:
             syscheck = alert.get("syscheck", {})
             path = syscheck.get("path")
             event = syscheck.get("event", "")
+            effective_user = (
+                syscheck.get("audit", {}).get("effective_user", {}).get("name", "")
+            )
             filenames.append(
                 re.sub(
                     r"[\.\-_/]",
@@ -85,6 +98,7 @@ class Mimizuku:
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_path": path,
                         "original_event": event,
+                        "original_effective_user": effective_user,
                     }
                 )
 
@@ -131,6 +145,7 @@ class Mimizuku:
                     "original_hostname",
                     "original_path",
                     "original_event",
+                    "original_effective_user",
                 ]
             ]
         except ValueError as e:
@@ -150,9 +165,15 @@ class Mimizuku:
         )
 
     @staticmethod
-    def load_model(model_path, ignore_files=[], abuse_files=[]):
+    def load_model(
+        model_path, ignore_files=[], abuse_files=[], ignore_effective_users=[]
+    ):
         saved_objects = joblib.load(model_path)
-        mimizuku = Mimizuku(ignore_files=ignore_files, abuse_files=abuse_files)
+        mimizuku = Mimizuku(
+            ignore_files=ignore_files,
+            abuse_files=abuse_files,
+            ignore_effective_users=ignore_effective_users,
+        )
         mimizuku.model = saved_objects["model"]
         mimizuku.event_encoder = saved_objects["event_encoder"]
         mimizuku.vectorizer = saved_objects["vectorizer"]
