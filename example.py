@@ -12,7 +12,7 @@ model.fit("./training.json")
 model.save_model("./model.pkl")
 
 # Load the model and use it for prediction
-loaded_model = Mimizuku.load_model("./model.pkl")
+loaded_model = Mimizuku.load_model("./model.pkl", ignore_effective_users=["root"])
 anomalies_df = loaded_model.predict("./test.json")
 
 pd.set_option("display.max_columns", None)

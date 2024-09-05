@@ -16,6 +16,7 @@ class Mimizuku:
         abuse_files=[],
         ignore_files=[],
         ignore_effective_users=[],
+        ignore_effective_user_ids=[],
     ):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors,
@@ -30,6 +31,7 @@ class Mimizuku:
         )
         self.abuse_files = abuse_files
         self.ignore_effective_users = ignore_effective_users
+        self.ignore_effective_user_ids = ignore_effective_user_ids
 
     def replace_temp_strings(self, path):
         pattern = r"[a-f0-9]{7,40}"
@@ -38,7 +40,7 @@ class Mimizuku:
         return modified_path
 
     def is_target_event(self, alert):
-        return (
+        if (
             "syscheck" in alert
             and re.match(r"55[0-9]", str(alert["rule"]["id"]))
             and int(alert["rule"]["level"]) > 0
@@ -46,20 +48,28 @@ class Mimizuku:
                 not alert["syscheck"]["path"].startswith(ignore_file)
                 for ignore_file in self.ignore_files
             )
-            and (
-                all(
-                    not alert["syscheck"]["audit"]["effective_user"]["name"]
-                    == ignore_user
-                    for ignore_user in self.ignore_effective_users
-                )
-            )
-            and (
-                all(
-                    not alert["syscheck"]["uname_after"] == ignore_user
-                    for ignore_user in self.ignore_effective_users
-                )
-            )
-        )
+        ):
+            user = None
+            user_id = None
+            if (
+                alert["syscheck"]
+                .get("audit", {})
+                .get("effective_user", {})
+                .get("name", None)
+                is not None
+            ):
+                user = alert["syscheck"]["audit"]["effective_user"]["name"]
+            elif alert["syscheck"].get("uname_after", None) is not None:
+                user = alert["syscheck"]["uname_after"]
+
+            if alert["syscheck"].get("uid_after", None) is not None:
+                user_id = alert["syscheck"]["uid_after"]
+
+            if user is not None and user in self.ignore_effective_users:
+                return False
+            if user_id is not None and user_id in self.ignore_effective_user_ids:
+                return False
+            return True
 
     def filename_to_vector(self, filename):
         return self.vectorizer.transform([filename])
@@ -140,7 +150,6 @@ class Mimizuku:
             anomalies = self.model.predict(X_test)
 
             anomalies_df = df_test[anomalies == -1]
-            # abuse_filesに含まれるファイル名を持つ行も異常として追加
             for abuse_file in self.abuse_files:
                 additional_anomalies = df_test[
                     df_test["original_path"].str.contains(abuse_file)
@@ -175,13 +184,18 @@ class Mimizuku:
 
     @staticmethod
     def load_model(
-        model_path, ignore_files=[], abuse_files=[], ignore_effective_users=[]
+        model_path,
+        ignore_files=[],
+        abuse_files=[],
+        ignore_effective_users=[],
+        ignore_effective_user_ids=[],
     ):
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku(
             ignore_files=ignore_files,
             abuse_files=abuse_files,
             ignore_effective_users=ignore_effective_users,
+            ignore_effective_user_ids=ignore_effective_user_ids,
         )
         mimizuku.model = saved_objects["model"]
         mimizuku.event_encoder = saved_objects["event_encoder"]
