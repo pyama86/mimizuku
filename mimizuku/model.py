@@ -53,6 +53,12 @@ class Mimizuku:
                     for ignore_user in self.ignore_effective_users
                 )
             )
+            and (
+                all(
+                    not alert["syscheck"]["uname_after"] == ignore_user
+                    for ignore_user in self.ignore_effective_users
+                )
+            )
         )
 
     def filename_to_vector(self, filename):
