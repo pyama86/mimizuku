@@ -9,10 +9,10 @@ model = Mimizuku(contamination=0.001, n_neighbors=5)
 model.fit("./training.json")
 
 # Save the trained model
-model.save_model("./model.pkl")
+model.save_model("./models")
 
 # Load the model and use it for prediction
-loaded_model = Mimizuku.load_model("./model.pkl", ignore_effective_users=["root"])
+loaded_model = Mimizuku.load_model("./models", ignore_users=["root"])
 anomalies_df = loaded_model.predict("./test.json")
 
 pd.set_option("display.max_columns", None)
