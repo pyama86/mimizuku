@@ -16,7 +16,6 @@ class Mimizuku:
         abuse_files=[],
         ignore_files=[],
         ignore_effective_users=[],
-        ignore_effective_user_ids=[],
     ):
         self.model = LocalOutlierFactor(
             n_neighbors=n_neighbors,
@@ -31,7 +30,6 @@ class Mimizuku:
         )
         self.abuse_files = abuse_files
         self.ignore_effective_users = ignore_effective_users
-        self.ignore_effective_user_ids = ignore_effective_user_ids
 
     def replace_temp_strings(self, path):
         pattern = r"[a-f0-9]{7,40}"
@@ -50,7 +48,6 @@ class Mimizuku:
             )
         ):
             user = None
-            user_id = None
             if (
                 alert["syscheck"]
                 .get("audit", {})
@@ -62,12 +59,7 @@ class Mimizuku:
             elif alert["syscheck"].get("uname_after", None) is not None:
                 user = alert["syscheck"]["uname_after"]
 
-            if alert["syscheck"].get("uid_after", None) is not None:
-                user_id = alert["syscheck"]["uid_after"]
-
             if user is not None and user in self.ignore_effective_users:
-                return False
-            if user_id is not None and user_id in self.ignore_effective_user_ids:
                 return False
             return True
 
@@ -188,14 +180,12 @@ class Mimizuku:
         ignore_files=[],
         abuse_files=[],
         ignore_effective_users=[],
-        ignore_effective_user_ids=[],
     ):
         saved_objects = joblib.load(model_path)
         mimizuku = Mimizuku(
             ignore_files=ignore_files,
             abuse_files=abuse_files,
             ignore_effective_users=ignore_effective_users,
-            ignore_effective_user_ids=ignore_effective_user_ids,
         )
         mimizuku.model = saved_objects["model"]
         mimizuku.event_encoder = saved_objects["event_encoder"]
