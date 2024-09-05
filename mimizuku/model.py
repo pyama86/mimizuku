@@ -46,9 +46,12 @@ class Mimizuku:
                 not alert["syscheck"]["path"].startswith(ignore_file)
                 for ignore_file in self.ignore_files
             )
-            and all(
-                alert["syscheck"]["audit"]["effective_user"]["name"] != ignore_user
-                for ignore_user in self.ignore_effective_users
+            and (
+                all(
+                    not alert["syscheck"]["audit"]["effective_user"]["name"]
+                    == ignore_user
+                    for ignore_user in self.ignore_effective_users
+                )
             )
         )
 
