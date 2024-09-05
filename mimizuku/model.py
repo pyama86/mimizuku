@@ -103,6 +103,10 @@ class Mimizuku:
                 )
             )
 
+            if not fit:
+                print(
+                    f"hostname: {alert.get('agent', {}).get('name')} path: {path} event: {event} effective_user: {effective_user}"
+                )
             if keep_original:
                 original_data.append(
                     {
