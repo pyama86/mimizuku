@@ -90,6 +90,7 @@ class Base:
         return os.path.join(model_dir, f"{name}_model.pkl")
 
     def save_model(self, model_dir):
+        print(Base.model_path(model_dir, self.name()))
         joblib.dump(
             {
                 "model": self.model,

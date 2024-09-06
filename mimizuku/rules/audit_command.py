@@ -38,13 +38,19 @@ class AuditCommand(Base):
             commands.append(command)
 
             if not fit:
+                user = None
+                match = re.search(r' UID="(\w+)"', alert["full_log"])
+                if match:
+                    user = match.group(1)
+
                 print(
-                    f"hostname: {alert.get('agent', {}).get('name')} command: {command}"
+                    f"hostname: {alert.get('agent', {}).get('name')} command: {command} user: {user}"
                 )
                 original_data.append(
                     {
                         "original_hostname": alert.get("agent", {}).get("name"),
                         "original_command": command,
+                        "original_user": user,
                     }
                 )
 
@@ -64,6 +70,7 @@ class AuditCommand(Base):
             [
                 "original_hostname",
                 "original_command",
+                "original_user",
             ]
         ]
 
