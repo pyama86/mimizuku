@@ -24,7 +24,7 @@ class AuditCommand(Base):
 
     def is_target_event(self, alert):
         ret = "80792" == str(alert["rule"]["id"]) and not any(
-            f'UID="{user}"' in alert["full_log"] for user in self.ignore_users
+            f' UID="{user}"' in alert["full_log"] for user in self.ignore_users
         )
         return ret
 
