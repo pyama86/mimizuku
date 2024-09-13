@@ -1,3 +1,4 @@
+import os
 import re
 
 import joblib
@@ -12,16 +13,25 @@ class FsNotify(Base):
         n_neighbors=20,
         contamination=0.05,
         ignore_files=[],
-        ignore_users=[],
+        ignore_user_names=[],
         abuse_files=[],
     ):
-        self.ignore_users = ignore_users
+        self.ignore_user_names = ignore_user_names
         self.ignore_files = ignore_files
         self.abuse_files = abuse_files
+        self.n_neighbors = n_neighbors
+        self.contamination = contamination
+
         super().__init__(n_neighbors=n_neighbors, contamination=contamination)
 
-    def name(self):
-        return "fs_notify"
+    def save_model_extra(self):
+        return {
+            "ignore_files": self.ignore_files,
+            "ignore_user_names": self.ignore_user_names,
+            "abuse_files": self.abuse_files,
+            "n_neighbors": self.n_neighbors,
+            "contamination": self.contamination,
+        }
 
     def is_target_event(self, alert):
         if (
@@ -45,7 +55,7 @@ class FsNotify(Base):
             elif alert["syscheck"].get("uname_after", None) is not None:
                 user = alert["syscheck"]["uname_after"]
 
-            if user is not None and user in self.ignore_users:
+            if user is not None and user in self.ignore_user_names:
                 return False
             return True
 
@@ -119,20 +129,22 @@ class FsNotify(Base):
     @staticmethod
     def load_model(
         model_dir,
-        ignore_files=[],
-        abuse_files=[],
-        ignore_users=[],
     ):
+        if not os.path.exists(FsNotify.model_path(model_dir, "fs_notify")):
+            return None
+
+        saved_objects = joblib.load(FsNotify.model_path(model_dir, "fs_notify"))
+
         me = FsNotify(
-            ignore_files=ignore_files,
-            abuse_files=abuse_files,
-            ignore_users=ignore_users,
+            ignore_files=saved_objects["ignore_files"],
+            ignore_user_names=saved_objects["ignore_user_names"],
+            abuse_files=saved_objects["abuse_files"],
+            n_neighbors=saved_objects["n_neighbors"],
+            contamination=saved_objects["contamination"],
         )
 
-        saved_objects = joblib.load(FsNotify.model_path(model_dir, me.name()))
         me.model = saved_objects["model"]
         me.vectorizer = saved_objects["vectorizer"]
-
         return me
 
     def filter_line(self, line):

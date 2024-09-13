@@ -24,7 +24,10 @@ class Base:
         )
 
     def name(self):
-        raise NotImplementedError
+        class_name = self.__class__.__name__
+        # CamelCase to snake_case
+        snake_case_name = re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
+        return snake_case_name
 
     def fit(self, data):
         try:
@@ -89,16 +92,23 @@ class Base:
     def model_path(model_dir, name):
         return os.path.join(model_dir, f"{name}_model.pkl")
 
+    def save_model_extra(self):
+        return {}
+
     def save_model(self, model_dir):
-        print(Base.model_path(model_dir, self.name()))
+        save_dict = {
+            "model": self.model,
+            "vectorizer": self.vectorizer,
+        }
+        save_dict.update(self.save_model_extra())
+
         joblib.dump(
-            {
-                "model": self.model,
-                "vectorizer": self.vectorizer,
-            },
+            save_dict,
             Base.model_path(model_dir, self.name()),
         )
 
     @staticmethod
-    def load_model():
+    def load_model(
+        model_dir,
+    ):
         raise NotImplementedError

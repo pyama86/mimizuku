@@ -1,9 +1,27 @@
 import pandas as pd
 
 from mimizuku import Mimizuku
+from mimizuku.rules.audit_command import AuditCommand
+from mimizuku.rules.fs_notify import FsNotify
 
 # Initialize the model
-model = Mimizuku(contamination=0.001, n_neighbors=5)
+n_neighbors = 5
+contamination = 0.001
+ignore_user_names = ["root"]
+
+fsn = FsNotify(
+    n_neighbors=n_neighbors,
+    contamination=contamination,
+)
+ac = AuditCommand(
+    n_neighbors=n_neighbors,
+    contamination=contamination,
+    ignore_user_names=ignore_user_names,
+)
+
+model = Mimizuku()
+model.add_rule(fsn)
+model.add_rule(ac)
 
 # Train the model with a log file or DataFrame
 model.fit("./training.json")
@@ -12,7 +30,7 @@ model.fit("./training.json")
 model.save_model("./models")
 
 # Load the model and use it for prediction
-loaded_model = Mimizuku.load_model("./models", ignore_users=["root"])
+loaded_model = Mimizuku.load_model("./models")
 anomalies_df = loaded_model.predict("./test.json")
 
 pd.set_option("display.max_columns", None)

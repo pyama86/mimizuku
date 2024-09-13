@@ -5,26 +5,11 @@ from mimizuku.rules.fs_notify import FsNotify
 class Mimizuku:
     def __init__(
         self,
-        n_neighbors=20,
-        contamination=0.05,
-        abuse_files=[],
-        ignore_files=[],
-        ignore_users=[],
     ):
-        self.rules = [
-            FsNotify(
-                n_neighbors=n_neighbors,
-                contamination=contamination,
-                ignore_files=ignore_files,
-                ignore_users=ignore_users,
-                abuse_files=abuse_files,
-            ),
-            AuditCommand(
-                n_neighbors=n_neighbors,
-                contamination=contamination,
-                ignore_users=ignore_users,
-            ),
-        ]
+        self.rules = []
+
+    def add_rule(self, rule):
+        self.rules.append(rule)
 
     def fit(self, data):
         try:
@@ -61,18 +46,13 @@ class Mimizuku:
     @staticmethod
     def load_model(
         model_path,
-        ignore_files=[],
-        abuse_files=[],
-        ignore_users=[],
     ):
-        fs_notify = FsNotify.load_model(
-            model_path,
-            ignore_files=ignore_files,
-            abuse_files=abuse_files,
-            ignore_users=ignore_users,
-        )
-        audit_command = AuditCommand.load_model(model_path, ignore_users=ignore_users)
+        rules = []
+        for rule in [FsNotify, AuditCommand]:
+            m = rule.load_model(model_path)
+            if m:
+                rules.append(m)
 
         me = Mimizuku()
-        me.rules = [fs_notify, audit_command]
+        me.rules = rules
         return me

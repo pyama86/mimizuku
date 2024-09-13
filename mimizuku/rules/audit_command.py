@@ -1,3 +1,4 @@
+import os
 import re
 
 import joblib
@@ -11,20 +12,35 @@ class AuditCommand(Base):
         self,
         n_neighbors=20,
         contamination=0.05,
-        ignore_users=[],
+        ignore_user_names=[],
+        ignore_user_ids=[],
     ):
         super().__init__(
             n_neighbors=n_neighbors,
             contamination=contamination,
         )
-        self.ignore_users = ignore_users
+        self.n_neighbors = n_neighbors
+        self.contamination = contamination
+        self.ignore_user_names = ignore_user_names
+        self.ignore_user_ids = ignore_user_ids
 
-    def name(self):
-        return "audit_command"
+    def save_model_extra(self):
+        return {
+            "n_neighbors": self.n_neighbors,
+            "contamination": self.contamination,
+            "ignore_user_names": self.ignore_user_names,
+            "ignore_user_ids": self.ignore_user_ids,
+        }
 
     def is_target_event(self, alert):
-        ret = "80792" == str(alert["rule"]["id"]) and not any(
-            f' UID="{user}"' in alert["full_log"] for user in self.ignore_users
+        ret = (
+            "80792" == str(alert["rule"]["id"])
+            and not any(
+                f' UID="{user}"' in alert["full_log"] for user in self.ignore_user_names
+            )
+            and not any(
+                f' uid="{user}"' in alert["full_log"] for user in self.ignore_user_ids
+            )
         )
         return ret
 
@@ -77,12 +93,17 @@ class AuditCommand(Base):
     @staticmethod
     def load_model(
         model_dir,
-        ignore_files=[],
-        abuse_files=[],
-        ignore_users=[],
     ):
-        me = AuditCommand(ignore_users=ignore_users)
-        saved_objects = joblib.load(AuditCommand.model_path(model_dir, me.name()))
+        if not os.path.exists(AuditCommand.model_path(model_dir, "audit_command")):
+            return None
+
+        saved_objects = joblib.load(AuditCommand.model_path(model_dir, "audit_command"))
+        me = AuditCommand(
+            n_neighbors=saved_objects["n_neighbors"],
+            contamination=saved_objects["contamination"],
+            ignore_user_names=saved_objects["ignore_user_names"],
+            ignore_user_ids=saved_objects["ignore_user_ids"],
+        )
         me.model = saved_objects["model"]
         me.vectorizer = saved_objects["vectorizer"]
         return me
