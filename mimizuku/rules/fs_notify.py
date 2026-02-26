@@ -111,7 +111,7 @@ class FsNotify(Base):
     def fill_anomaly_data(self, anomalies_df, df_test):
         for abuse_file in self.abuse_files:
             additional_anomalies = df_test[
-                df_test["original_path"].str.contains(abuse_file)
+                df_test["original_path"].str.contains(abuse_file, regex=False)
             ]
             anomalies_df = pd.concat(
                 [anomalies_df, additional_anomalies]
