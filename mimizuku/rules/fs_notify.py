@@ -18,11 +18,21 @@ class FsNotify(Base):
     ):
         self.ignore_user_names = ignore_user_names
         self.ignore_files = ignore_files
-        self.abuse_files = abuse_files
+        self._abuse_files = abuse_files
+        self._abuse_files_set = set(abuse_files)
         self.n_neighbors = n_neighbors
         self.contamination = contamination
 
         super().__init__(n_neighbors=n_neighbors, contamination=contamination)
+
+    @property
+    def abuse_files(self):
+        return self._abuse_files
+
+    @abuse_files.setter
+    def abuse_files(self, value):
+        self._abuse_files = value
+        self._abuse_files_set = set(value)
 
     def save_model_extra(self):
         return {
@@ -109,13 +119,11 @@ class FsNotify(Base):
         return X, df
 
     def fill_anomaly_data(self, anomalies_df, df_test):
-        for abuse_file in self.abuse_files:
-            additional_anomalies = df_test[
-                df_test["original_path"].str.contains(abuse_file, regex=False)
-            ]
-            anomalies_df = pd.concat(
-                [anomalies_df, additional_anomalies]
-            ).drop_duplicates()
+        basenames = df_test["original_path"].apply(lambda p: os.path.basename(p))
+        additional_anomalies = df_test[basenames.isin(self._abuse_files_set)]
+        anomalies_df = pd.concat(
+            [anomalies_df, additional_anomalies]
+        ).drop_duplicates()
 
         return anomalies_df[
             [
